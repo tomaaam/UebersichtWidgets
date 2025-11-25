@@ -5,8 +5,8 @@ export const command = "interface=$(route get default | grep interface | awk '{p
 export const refreshFrequency = 1000; // 1 second
 
 export const className = `
-  left: 20px;
-  bottom: 400px;
+  left: 15px;
+  top: 15px;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   z-index: 10;
@@ -22,7 +22,7 @@ export const className = `
     display: flex;
     flex-direction: column;
     gap: 8px;
-    min-width: 140px;
+    min-width: 160px;
   }
 
   .title {
@@ -37,20 +37,22 @@ export const className = `
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 4px;
   }
 
   .stat-item {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    width: 100%;
   }
 
   .label {
     font-size: 10px;
     color: rgba(255, 255, 255, 0.5);
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 4px;
   }
 
   .value {
@@ -59,8 +61,25 @@ export const className = `
     font-variant-numeric: tabular-nums;
   }
 
+  .bar-container {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+    width: 100%;
+  }
+
+  .bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
   .download { color: #61dafb; }
   .upload { color: #f5a623; }
+  .bg-download { background-color: #61dafb; }
+  .bg-upload { background-color: #f5a623; }
 `;
 
 const formatBytes = (bytes) => {
@@ -74,6 +93,8 @@ const formatBytes = (bytes) => {
 let previousState = {
   inBytes: 0,
   outBytes: 0,
+  maxIn: 1024 * 1024, // Start with 1MB/s baseline to avoid full bars immediately
+  maxOut: 1024 * 1024,
   timestamp: Date.now()
 };
 
@@ -99,8 +120,6 @@ export const render = ({ output, error }) => {
   // Avoid division by zero or negative time
   const safeTimeDiff = timeDiff > 0 ? timeDiff : 1;
 
-  // Calculate speed (Bytes per second)
-  // Handle counter wrap-around or reset (if current < previous, assume reset or 0 speed for this tick)
   let speedIn = 0;
   let speedOut = 0;
 
@@ -112,37 +131,43 @@ export const render = ({ output, error }) => {
     speedOut = (currentOut - previousState.outBytes) / safeTimeDiff;
   }
 
-  // Update state for next render
-  // Note: In Übersicht, 'render' is called fresh each time, but module-level variables persist.
-  // However, relying on module-level variables can be tricky if the widget reloads.
-  // A better approach for state in Übersicht React widgets is usually not available 
-  // without a proper React class/hook structure, but 'render' is a functional component.
-  // The standard way to handle 'previous' data in simple functional Übersicht widgets 
-  // is often just using the module scope variable as done here, 
-  // OR using the 'updateState' method if we were exporting a class.
-  // Since we are exporting 'render' (functional), we rely on the module scope 'previousState'.
+  // Update max speeds for scaling
+  const maxIn = Math.max(previousState.maxIn, speedIn);
+  const maxOut = Math.max(previousState.maxOut, speedOut);
+
+  // Calculate percentages
+  const percentIn = Math.min(100, (speedIn / maxIn) * 100);
+  const percentOut = Math.min(100, (speedOut / maxOut) * 100);
 
   previousState = {
     inBytes: currentIn,
     outBytes: currentOut,
+    maxIn,
+    maxOut,
     timestamp: now
   };
 
   return (
     <div className="widget-container">
       <div className="title">Network</div>
-      <div className="stats-row">
-        <div className="stat-item">
-          <span className="label">
-            <span className="download">↓</span> Down
-          </span>
+
+      <div className="stat-item">
+        <div className="label">
+          <span><span className="download">↓</span> Down</span>
           <span className="value">{formatBytes(speedIn)}</span>
         </div>
-        <div className="stat-item" style={{ alignItems: 'flex-end' }}>
-          <span className="label">
-            Up <span className="upload">↑</span>
-          </span>
+        <div className="bar-container">
+          <div className="bar bg-download" style={{ width: `${percentIn}%` }}></div>
+        </div>
+      </div>
+
+      <div className="stat-item" style={{ marginTop: '8px' }}>
+        <div className="label">
+          <span><span className="upload">↑</span> Up</span>
           <span className="value">{formatBytes(speedOut)}</span>
+        </div>
+        <div className="bar-container">
+          <div className="bar bg-upload" style={{ width: `${percentOut}%` }}></div>
         </div>
       </div>
     </div>
